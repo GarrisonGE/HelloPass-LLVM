@@ -1,0 +1,4 @@
+/Users/garrison-j/Desktop/Git-local/HelloPass-LLVM/Pass/build/CMakeFiles/rebuild_cache.dir
+/Users/garrison-j/Desktop/Git-local/HelloPass-LLVM/Pass/build/CMakeFiles/edit_cache.dir
+/Users/garrison-j/Desktop/Git-local/HelloPass-LLVM/Pass/build/CMakeFiles/LLVMValueNumberingPass.dir
+/Users/garrison-j/Desktop/Git-local/HelloPass-LLVM/Pass/build/CMakeFiles/intrinsics_gen.dir

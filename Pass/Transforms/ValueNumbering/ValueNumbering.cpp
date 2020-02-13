@@ -31,17 +31,21 @@ struct ValueNumbering : public FunctionPass {
         }
         return false;
     }
+  
 
   bool runOnFunction(Function &F) override {
+        //get the name of input file
         string file_name = F.getParent()->getSourceFileName();
+        //create *.out file
         int index = file_name.find(".");
         file_name = file_name.substr(0,index);
         string c = ".out";
-        //create *.out file
         file_name.append(c);
         ofstream location_out;
-        location_out.open(file_name, std::ios::out | std::ios::app);
+        location_out.open(file_name, std::ios::out|std::ios::app);
         if (!location_out.is_open()) return 0;
+
+
         errs() << "ValueNumbering: ";
         errs() << F.getName() << "\n";
     
@@ -49,11 +53,10 @@ struct ValueNumbering : public FunctionPass {
 
         for (auto& basic_block : F)//iterate over basic blocks of the given function
         {
-            map<Value*, int> varToVersion;              // map the variable to its latest version number
+            map<Value*, int> versionMap;              // map the variable to its latest version number
             map<pair<Value*, int>, int> valueMap;       // map the variable to version number and value number
-            map<int, pair<Value*,int>> valueMap_re;     // map the value number to variable and its version number
             map<string, int> exprMap;
-            int counter = 1;
+            int counter = 1; //represent the value numbering
             //create 
             for (auto& inst : basic_block)//iterate over the instructions in a BB
             {
@@ -66,34 +69,34 @@ struct ValueNumbering : public FunctionPass {
                   errs() << "Value one is:" << *v1<<"\n";
                   errs() << "Value two is:" << *v2<<"\n";
                   errs() << "Op Code:" << inst.getOpcodeName()<<"\n"; // print opcode name
+                  //search left operand in value map
                   if(!findInMap(valueMap, v1))
                   {   // if not found in hash table
-                    valueMap.insert(make_pair(make_pair(v1, 0),counter));
-                    valueMap_re[counter] = make_pair(v1, 0);   // assign a new VN to the variable
-                    varToVersion[v1] = 0;
+                    valueMap.insert(make_pair(make_pair(v1, 0),counter));//insert new value into valueMap
+                    versionMap[v1] = 0;
                     vn1 = counter;
                     counter ++;
                   }
                   else{                            // if found in hash table
-                    vn1 = valueMap.at(make_pair(v1, varToVersion[v1]));
+                    vn1 = valueMap.at(make_pair(v1, versionMap[v1]));
                   }
+                  //search left operand in value map
                   if(!findInMap(valueMap, v2))
                   {   // if not found in hash table
                     valueMap.insert(make_pair(make_pair(v2, 0),counter));
-                    valueMap_re[counter] = make_pair(v2, 0);   // assign a new VN to the variable
-                    varToVersion[v2] = 0;
+                    versionMap[v2] = 0;
                     vn2 = counter;
                     counter ++;
                   }
                   else{                            // if found in hash table
-                    vn2 = valueMap.at(make_pair(v2, varToVersion[v2]));
+                    vn2 = valueMap.at(make_pair(v2, versionMap[v2]));
                   }
-                  
+                  // get the operation of instruction.
                   string op;
                   if(inst.getOpcode() == Instruction::Add) op = "+";
-                  if(inst.getOpcode() == Instruction::Sub) op = "-";
-                  if(inst.getOpcode() == Instruction::Mul) op = "*";
-                  if(inst.getOpcode() == Instruction::SDiv) op = "/";
+                  else if(inst.getOpcode() == Instruction::Sub) op = "-";
+                  else if(inst.getOpcode() == Instruction::Mul) op = "*";
+                  else if(inst.getOpcode() == Instruction::SDiv) op = "/";
                               
                   int vn1o=vn1;
                   int vn2o=vn2;
@@ -103,41 +106,30 @@ struct ValueNumbering : public FunctionPass {
                   }
 
                   string expr = to_string(vn1) + op + to_string(vn2);
-                  string exprOld = to_string(vn1o)+op+to_string(vn2o);
-                  Value* ptr = dyn_cast<Value>(&inst);
-                  if(varToVersion.find(ptr) == varToVersion.end()){
-                    varToVersion.insert(make_pair(ptr, 0));
+                  string exprOld = to_string(vn1o)+op+to_string(vn2o);//For output
+                  Value* ptr = dyn_cast<Value>(&inst);//get the left variable of definititon
+                  if(versionMap.find(ptr) == versionMap.end()){
+                    versionMap.insert(make_pair(ptr, 0));
                   }
-
+                  else{
+                    versionMap[ptr] += 1;
+                  }
+                  //find the expression is in expression map or not
                   if(exprMap.find(expr) == exprMap.end()) {
                     exprMap[expr] = counter;
-                    if(!findInMap(valueMap, ptr)){
-                      valueMap.insert(make_pair(make_pair(ptr, 0),counter));
-                      valueMap_re[counter] = make_pair(ptr, 0);
-                    }
-                    else{
-                      varToVersion[ptr] += 1;
-                      valueMap.insert(make_pair(make_pair(ptr, varToVersion[ptr]),counter));
-                      valueMap_re[counter] = make_pair(ptr, varToVersion[ptr]);
-                    }
-                      ++ counter;
+                    valueMap.insert(make_pair(make_pair(ptr, versionMap[ptr]),counter));
+                    ++ counter;
                   }
                   else{
                     int tmp_counter = exprMap[expr];
 
-                    errs() << "Redunant Computation: " << *ptr << "\n";
-                    if(!findInMap(valueMap, ptr)){
-                      valueMap.insert(make_pair(make_pair(ptr, 0),tmp_counter));
-                      valueMap_re[tmp_counter] = make_pair(ptr, 0);
-                    }
-                    else{
-                      varToVersion[ptr] += 1;
-                      valueMap.insert(make_pair(make_pair(ptr, varToVersion[ptr]),tmp_counter));
-                      valueMap_re[tmp_counter] = make_pair(ptr, varToVersion[ptr]);
-                    }
+                    errs() << "This expression is a Redundancy: " << *ptr << "\n";
+                    versionMap[ptr] += 1;
+                    valueMap.insert(make_pair(make_pair(ptr, versionMap[ptr]),tmp_counter));
+
                   }
-                 
-                    location_out<<exprMap[expr]<< "=" <<exprOld<<"\n"; 
+                    int defi = valueMap.at(make_pair(ptr, versionMap[ptr]));
+                    location_out<<defi<< "=" <<exprOld<<"\n"; 
                   
                    
                 }
